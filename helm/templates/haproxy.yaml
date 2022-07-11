@@ -1,0 +1,241 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.haproxy.name }}
+  namespace: {{ .Values.ingress.namespace }}
+
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Values.haproxy.name }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - endpoints
+  - nodes
+  - pods
+  - services
+  - namespaces
+  - events
+  - serviceaccounts
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - "extensions"
+  - "networking.k8s.io"
+  resources:
+  - ingresses
+  - ingresses/status
+  - ingressclasses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - "extensions"
+  - "networking.k8s.io"
+  resources:
+  - ingresses/status
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - patch
+  - update
+- apiGroups:
+  - core.haproxy.org
+  resources:
+  - '*'
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+- apiGroups:
+  - "discovery.k8s.io"
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Values.haproxy.name }}
+  namespace: {{ .Values.ingress.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Values.haproxy.name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ .Values.haproxy.name }}
+  namespace: {{ .Values.ingress.namespace }}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.haproxy.name }}
+  namespace: {{ .Values.ingress.namespace }}
+data:
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    run: ingress-default-backend
+  name: haproxy-kubernetes-ingress-default-backend
+  namespace: {{ .Values.ingress.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: ingress-default-backend
+  template:
+    metadata:
+      labels:
+        run: ingress-default-backend
+    spec:
+      containers:
+      - name: ingress-default-backend
+        image: gcr.io/google_containers/defaultbackend:1.0
+        ports:
+        - containerPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: ingress-default-backend
+  name: haproxy-kubernetes-ingress-default-backend
+  namespace: {{ .Values.ingress.namespace }}
+spec:
+  selector:
+    run: ingress-default-backend
+  ports:
+  - name: port-1
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    run: haproxy-ingress
+  name: haproxy-kubernetes-ingress
+  namespace: {{ .Values.ingress.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: haproxy-ingress
+  template:
+    metadata:
+      labels:
+        run: haproxy-ingress
+    spec:
+      serviceAccountName: {{ .Values.haproxy.name }}
+      containers:
+      - name: haproxy-ingress
+        image: haproxytech/kubernetes-ingress
+        imagePullPolicy: IfNotPresent
+        args:
+          - --configmap={{ .Values.ingress.namespace }}/{{ .Values.haproxy.name }}
+          - --default-backend-service={{ .Values.ingress.namespace }}/haproxy-kubernetes-ingress-default-backend
+          - --namespace-whitelist={{ .Values.ingress.namespace }}
+          - --namespace-whitelist={{ .Values.haproxy.whitelistnamespace1 }}
+          - --namespace-whitelist={{ .Values.haproxy.whitelistnamespace2 }}
+          - --namespace-whitelist={{ .Values.haproxy.whitelistnamespace3 }}
+          - --ingress.class={{ .Values.ingress.ingress_class }}
+          - --publish-service={{ .Values.ingress.namespace }}/haproxy-kubernetes-ingress
+          - --log=info
+        securityContext:
+          runAsUser:  1000
+          runAsGroup: 1000
+          capabilities:
+            drop:
+              - ALL
+            add:
+              - NET_BIND_SERVICE
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "50Mi"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 1042
+        ports:
+        - name: http
+          containerPort: 80
+        - name: https
+          containerPort: 443
+        - name: stat
+          containerPort: 1024
+        env:
+        - name: TZ
+          value: "Etc/UTC"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+      initContainers:
+        - name: sysctl
+          image: busybox:musl
+          command:
+            - /bin/sh
+            - -c
+            - sysctl -w net.ipv4.ip_unprivileged_port_start=0
+          securityContext:
+            privileged: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: haproxy-ingress
+  name: haproxy-kubernetes-ingress
+  namespace: {{ .Values.ingress.namespace }}
+spec:
+  selector:
+    run: haproxy-ingress
+  type: LoadBalancer
+  loadBalancerIP: {{ .Values.haproxy.loadBalancerIP }}
+#  loadBalancerSourceRanges: [81.17.238.0/24,217.199.128.0/24,100.126.0.0/16]
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: 443
+  - name: stat
+    port: 1024
+    protocol: TCP
+    targetPort: 1024
