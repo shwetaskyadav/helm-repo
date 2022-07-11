@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deploy.name }}
+  labels:
+    app: {{ .Values.deploy.app }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.deploy.app }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.deploy.app }}
+    spec:
+      containers:
+      - name: {{ .Values.deploy.app }}
+        image: {{ .Values.deploy.image }}
+        env:
+        - name: EnvironmentName
+          value: {{ .Values.deploy.env }}
+        ports:
+        - containerPort: {{ .Values.deploy.containerPort }}
+        resources:
+          requests:
+            memory: {{ .Values.deploy.memory_request }}
+            cpu: {{ .Values.deploy.cpu_request }}
+          limits:
+            memory: {{ .Values.deploy.memory_limit }}
+            cpu: {{ .Values.deploy.cpu_limit }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            add:
+            - CHOWN
+            - SYS_CHROOT
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          readOnlyRootFilesystem: true
