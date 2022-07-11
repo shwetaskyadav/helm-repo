@@ -31,4 +31,4 @@ haproxy:
   loadBalancerIP: 100.126.22.76
   whitelistnamespace1: uat-userms
   whitelistnamespace2: ort-userms
-  whitelistnamespace2: trn-userms
+  whitelistnamespace3: trn-userms
