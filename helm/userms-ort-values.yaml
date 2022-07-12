@@ -1,0 +1,27 @@
+deploy:
+  name: user-ms
+  app: user-ms-app
+  image: proget.virginmedia.ie/devops_enablement_mvp/library/vmie-user-ms:13
+  env: ORT
+  containerPort: 5000
+  connectionstringsecret: user-ms-connection-string-secret
+  cpu_request: 60m
+  memory_request: 100Mi
+  cpu_limit: 200m
+  memory_limit: 600Mi
+  config_map_name: ort-user-ms-environment-configmap
+
+service:
+  name: user-ms-service
+  type: ClusterIP
+  app: user-ms-app
+  port: 80
+  targetPort: 5000
+
+ingress:
+  name: userms-ingress
+  namespace: ort-userms
+  svc_name: user-ms-service
+  ingress_class: haproxy-userms
+  hostname: userms.appsort.virginmedia.ie
+  tls_name: userms-ingress-tls
