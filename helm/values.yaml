@@ -28,7 +28,7 @@ ingress:
 
 haproxy:
   name: haproxy-kubernetes-ingress-jit-userms
-  loadBalancerIP: 100.126.22.76
+  loadBalancerIP: 
   whitelistnamespace1: uat-userms
   whitelistnamespace2: ort-userms
   whitelistnamespace3: trn-userms
